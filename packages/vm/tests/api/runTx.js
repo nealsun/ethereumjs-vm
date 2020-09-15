@@ -68,7 +68,7 @@ tape('should run simple tx without errors', async (t) => {
   const suite = setup(vm)
 
   const tx = getTransaction(true)
-  const caller = tx.getSenderAddress().toBuffer()
+  const caller = tx.getSenderAddress().buf
   const acc = createAccount()
 
   await suite.putAccount(caller, acc)
@@ -85,7 +85,7 @@ tape('should fail when account balance overflows (call)', async (t) => {
 
   const tx = getTransaction(true, '0x01')
 
-  const caller = tx.getSenderAddress().toBuffer()
+  const caller = tx.getSenderAddress().buf
   const from = createAccount()
   await suite.putAccount(caller, from)
 
@@ -105,7 +105,7 @@ tape('should fail when account balance overflows (create)', async (t) => {
 
   const tx = getTransaction(true, '0x01', true)
 
-  const caller = tx.getSenderAddress().toBuffer()
+  const caller = tx.getSenderAddress().buf
   const from = createAccount()
   await suite.putAccount(caller, from)
 
@@ -152,7 +152,7 @@ tape('should clear storage cache after every transaction', async (t) => {
     common,
   ).sign(privateKey)
 
-  await vm.stateManager.putAccount(tx.getSenderAddress(), createAccount())
+  await vm.stateManager.putAccount(tx.getSenderAddress().buf, createAccount())
 
   await vm.runTx({ tx }) // this tx will fail, but we have to ensure that the cache is cleared
 
@@ -169,7 +169,7 @@ tape('should clear storage cache after every transaction', async (t) => {
 
   const tx = getTransaction(true)
   const acc = createAccount()
-  const caller = tx.getSenderAddress().toBuffer()
+  const caller = tx.getSenderAddress().buf
   await suite.putAccount(caller, acc)
   await suite.cacheFlush()
   suite.vm.stateManager.cache.clear()
