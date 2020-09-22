@@ -19,20 +19,25 @@ import { Block } from './block'
 export class BlockHeader {
   public raw!: Buffer[]
   public parentHash!: Buffer
-  public uncleHash!: Buffer
-  public coinbase!: Buffer
+  // public uncleHash!: Buffer
+  // public coinbase!: Buffer
   public stateRoot!: Buffer
+  // public transactionsRoot!: Buffer
+  // public receiptRoot!: Buffer
   public transactionsTrie!: Buffer
   public receiptTrie!: Buffer
-  public bloom!: Buffer
-  public difficulty!: Buffer
+  public dbHash!: Buffer
+  public bloom!: Buffer //logBloom
+  // public difficulty!: Buffer
   public number!: Buffer
   public gasLimit!: Buffer
   public gasUsed!: Buffer
   public timestamp!: Buffer
   public extraData!: Buffer
-  public mixHash!: Buffer
-  public nonce!: Buffer
+  public sealer!: Buffer
+  public sealerList!: Buffer
+  public headHash!: Buffer
+  // public nonce!: Buffer
 
   readonly _common: Common
 
@@ -73,20 +78,30 @@ export class BlockHeader {
         length: 32,
         default: zeros(32),
       },
-      {
-        name: 'uncleHash',
-        default: KECCAK256_RLP_ARRAY,
-      },
-      {
-        name: 'coinbase',
-        length: 20,
-        default: zeros(20),
-      },
+      // {
+      //   name: 'uncleHash',
+      //   default: KECCAK256_RLP_ARRAY,
+      // },
+      // {
+      //   name: 'coinbase',
+      //   length: 20,
+      //   default: zeros(20),
+      // },
       {
         name: 'stateRoot',
         length: 32,
         default: zeros(32),
       },
+      // {
+      //   name: 'transactionsRoot',
+      //   length: 32,
+      //   default: KECCAK256_RLP,
+      // },
+      // {
+      //   name: 'receiptRoot',
+      //   length: 32,
+      //   default: KECCAK256_RLP,
+      // },
       {
         name: 'transactionsTrie',
         length: 32,
@@ -98,12 +113,13 @@ export class BlockHeader {
         default: KECCAK256_RLP,
       },
       {
-        name: 'bloom',
-        default: zeros(256),
+        name: 'dbHash',
+        length: 32,
+        default: KECCAK256_RLP,
       },
       {
-        name: 'difficulty',
-        default: Buffer.from([]),
+        name: 'bloom',
+        default: zeros(256),
       },
       {
         name: 'number',
@@ -130,13 +146,24 @@ export class BlockHeader {
         default: Buffer.from([]),
       },
       {
-        name: 'mixHash',
-        default: zeros(32),
-        // length: 32
+        name: 'extraData',
+        allowZero: true,
+        empty: true,
+        default: Buffer.from([]),
       },
       {
-        name: 'nonce',
-        default: zeros(8), // sha3(42)
+        name: 'sealer',
+        length: 128,
+        default: zeros(128),
+      },
+      {
+        name: 'sealerList',
+        default: Buffer.from([]),
+      },
+      {
+        name: 'headHash',
+        default: zeros(32),
+        // length: 32
       },
     ]
     defineProperties(this, fields, data)
@@ -149,92 +176,6 @@ export class BlockHeader {
       this._setGenesisParams()
     }
 
-    this._checkDAOExtraData()
-  }
-
-  /**
-   * Returns the canonical difficulty for this block.
-   *
-   * @param parentBlock - the parent `Block` of this header
-   */
-  canonicalDifficulty(parentBlock: Block): BN {
-    const hardfork = this._getHardfork()
-    const blockTs = new BN(this.timestamp)
-    const parentTs = new BN(parentBlock.header.timestamp)
-    const parentDif = new BN(parentBlock.header.difficulty)
-    const minimumDifficulty = new BN(
-      this._common.paramByHardfork('pow', 'minimumDifficulty', hardfork),
-    )
-    const offset = parentDif.div(
-      new BN(this._common.paramByHardfork('pow', 'difficultyBoundDivisor', hardfork)),
-    )
-    let num = new BN(this.number)
-
-    // We use a ! here as TS can follow this hardforks-dependent logic, but it always gets assigned
-    let dif!: BN
-
-    if (this._common.hardforkGteHardfork(hardfork, 'byzantium')) {
-      // max((2 if len(parent.uncles) else 1) - ((timestamp - parent.timestamp) // 9), -99) (EIP100)
-      const uncleAddend = parentBlock.header.uncleHash.equals(KECCAK256_RLP_ARRAY) ? 1 : 2
-      let a = blockTs.sub(parentTs).idivn(9).ineg().iaddn(uncleAddend)
-      const cutoff = new BN(-99)
-      // MAX(cutoff, a)
-      if (cutoff.cmp(a) === 1) {
-        a = cutoff
-      }
-      dif = parentDif.add(offset.mul(a))
-    }
-
-    if (this._common.hardforkGteHardfork(hardfork, 'muirGlacier')) {
-      // Istanbul/Berlin difficulty bomb delay (EIP2384)
-      num.isubn(9000000)
-      if (num.ltn(0)) {
-        num = new BN(0)
-      }
-    } else if (this._common.hardforkGteHardfork(hardfork, 'constantinople')) {
-      // Constantinople difficulty bomb delay (EIP1234)
-      num.isubn(5000000)
-      if (num.ltn(0)) {
-        num = new BN(0)
-      }
-    } else if (this._common.hardforkGteHardfork(hardfork, 'byzantium')) {
-      // Byzantium difficulty bomb delay (EIP649)
-      num.isubn(3000000)
-      if (num.ltn(0)) {
-        num = new BN(0)
-      }
-    } else if (this._common.hardforkGteHardfork(hardfork, 'homestead')) {
-      // 1 - (block_timestamp - parent_timestamp) // 10
-      let a = blockTs.sub(parentTs).idivn(10).ineg().iaddn(1)
-      const cutoff = new BN(-99)
-      // MAX(cutoff, a)
-      if (cutoff.cmp(a) === 1) {
-        a = cutoff
-      }
-      dif = parentDif.add(offset.mul(a))
-    } else {
-      // pre-homestead
-      if (
-        parentTs
-          .addn(this._common.paramByHardfork('pow', 'durationLimit', hardfork))
-          .cmp(blockTs) === 1
-      ) {
-        dif = offset.add(parentDif)
-      } else {
-        dif = parentDif.sub(offset)
-      }
-    }
-
-    const exp = num.idivn(100000).isubn(2)
-    if (!exp.isNeg()) {
-      dif.iadd(new BN(2).pow(exp))
-    }
-
-    if (dif.cmp(minimumDifficulty) === -1) {
-      dif = minimumDifficulty
-    }
-
-    return dif
   }
 
   /**
@@ -242,10 +183,10 @@ export class BlockHeader {
    *
    * @param parentBlock - this block's parent
    */
-  validateDifficulty(parentBlock: Block): boolean {
-    const dif = this.canonicalDifficulty(parentBlock)
-    return dif.cmp(new BN(this.difficulty)) === 0
-  }
+  // validateDifficulty(parentBlock: Block): boolean {
+  //   const dif = this.canonicalDifficulty(parentBlock)
+  //   return dif.cmp(new BN(this.difficulty)) === 0
+  // }
 
   /**
    * Validates the gasLimit.
@@ -299,10 +240,6 @@ export class BlockHeader {
       }
     }
 
-    if (!this.validateDifficulty(parentBlock)) {
-      throw new Error('invalid Difficulty')
-    }
-
     if (!this.validateGasLimit(parentBlock)) {
       throw new Error('invalid gas limit')
     }
@@ -344,9 +281,9 @@ export class BlockHeader {
     }
     this.timestamp = this._common.genesis().timestamp
     this.gasLimit = this._common.genesis().gasLimit
-    this.difficulty = this._common.genesis().difficulty
+    // this.difficulty = this._common.genesis().difficulty
     this.extraData = this._common.genesis().extraData
-    this.nonce = this._common.genesis().nonce
+    // this.nonce = this._common.genesis().nonce
     this.stateRoot = this._common.genesis().stateRoot
     this.number = Buffer.from([])
   }

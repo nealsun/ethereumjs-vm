@@ -39,6 +39,27 @@ const BLOCK_HASH_PEFIX = Buffer.from('H')
  */
 const BODY_PREFIX = Buffer.from('b')
 
+
+const SYS_NUMBER_2_HASH_PREFIX =  Buffer.from("_sys_number_2_hash_")
+
+const SYS_BLOCK_2_NONC_PREFIX =  Buffer.from("_sys_block_2_nonce_")
+
+const SYS_CNS_PREFIX =  Buffer.from("_sys_cns_")
+
+const SYS_CONFIG_PREFIX =  Buffer.from("_sys_config_")
+
+const SYS_CONSENSUS_PREFIX =  Buffer.from("_sys_consensus_")
+
+const SYS_CURRENT_STATE_PREFIX =  Buffer.from("_sys_current_state_")
+
+const SYS_HASH_2_BLOCK_PREFIX =  Buffer.from("_sys_hash_2_block_")
+
+const SYS_TABLE_ACCESS_PREFIX =  Buffer.from("_sys_table_access_")
+
+const SYS_TALBES_PREFIX =  Buffer.from("_sys_talbes_")
+
+const SYS_TX_HASH_2_BLOCK_PREFIX =  Buffer.from("_sys_tx_hash_2_block_")
+
 // Utility functions
 
 /**
@@ -52,7 +73,8 @@ const headerKey = (n: BN, hash: Buffer) => Buffer.concat([HEADER_PREFIX, bufBE8(
 
 const bodyKey = (n: BN, hash: Buffer) => Buffer.concat([BODY_PREFIX, bufBE8(n), hash])
 
-const numberToHashKey = (n: BN) => Buffer.concat([HEADER_PREFIX, bufBE8(n), NUM_SUFFIX])
+// const numberToHashKey = (n: BN) => Buffer.concat([HEADER_PREFIX, bufBE8(n), NUM_SUFFIX])
+const numberToHashKey = (n: BN) => Buffer.concat([SYS_NUMBER_2_HASH_PREFIX, bufBE8(n)])
 
 const hashToNumberKey = (hash: Buffer) => Buffer.concat([BLOCK_HASH_PEFIX, hash])
 

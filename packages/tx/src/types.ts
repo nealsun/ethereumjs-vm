@@ -21,6 +21,17 @@ export type BufferLike = Buffer | TransformableToBuffer | PrefixedHexString | nu
  * A transaction's data.
  */
 export interface TxData {
+
+  // from?: BufferLike
+
+  chainId?: BufferLike
+
+  groupId?: BufferLike
+
+  extraData?: BufferLike
+
+  blockLimit?: BufferLike
+
   /**
    * The transaction's gas limit.
    */

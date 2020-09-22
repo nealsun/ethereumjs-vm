@@ -13,6 +13,8 @@ import {
 import Common from '@ethereumjs/common'
 import { Buffer } from 'buffer'
 import { BufferLike, PrefixedHexString, TxData, TransactionOptions } from './types'
+import { Buffer } from 'safe-buffer'
+import { deprecate } from 'util'
 
 // secp256k1n/2
 const N_DIV_2 = new BN('7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0', 16)
@@ -25,9 +27,15 @@ export default class Transaction {
   public nonce!: Buffer
   public gasLimit!: Buffer
   public gasPrice!: Buffer
+  public blockLimit!: Buffer
+
+  // public from!: Buffer
   public to!: Buffer
   public value!: Buffer
   public data!: Buffer
+  public chainId!: Buffer
+  public groupId!: Buffer
+  public extraData!: Buffer
   public v!: Buffer
   public r!: Buffer
   public s!: Buffer
@@ -52,12 +60,17 @@ export default class Transaction {
    * @example
    * ```js
    * const txData = {
+   *   chainId: 1,
+   *   groupId: 1,
+   *   blockLimit: 1000,
    *   nonce: '0x00',
    *   gasPrice: '0x09184e72a000',
    *   gasLimit: '0x2710',
+   *   // from: '0x0000000000000000000000000000000000000001'
    *   to: '0x0000000000000000000000000000000000000000',
    *   value: '0x00',
    *   data: '0x7f7465737432000000000000000000000000000000000000000000000000000000600057',
+   *   extraData: '0x0000000000000000000000000000000000'
    *   v: '0x1c',
    *   r: '0x5e1d3a76fbf824220eafc8c79ad578ad2b67d01b0c2425eb1f1347e8f50882ab',
    *   s: '0x5bd428537f05f9830e93792f90ea6a3e2d1ee84952dd96edbae9f658f831ab13'
@@ -105,6 +118,18 @@ export default class Transaction {
         default: Buffer.from([]),
       },
       {
+        name: 'blockLimit',
+        length: 32,
+        allowLess: true,
+        default: Buffer.from([]),
+      },
+      // {
+      //   name: 'from',
+      //   allowZero: true,
+      //   length: 20,
+      //   default: Buffer.from([]),
+      // },
+      {
         name: 'to',
         allowZero: true,
         length: 20,
@@ -119,6 +144,23 @@ export default class Transaction {
       {
         name: 'data',
         alias: 'input',
+        allowZero: true,
+        default: Buffer.from([]),
+      },
+      {
+        name: 'chainId',
+        length: 32,
+        allowLess: true,
+        default: Buffer.from([]),
+      },
+      {
+        name: 'groupId',
+        length: 32,
+        allowLess: true,
+        default: Buffer.from([]),
+      },
+      {
+        name: 'extraData',
         allowZero: true,
         default: Buffer.from([]),
       },
@@ -177,16 +219,12 @@ export default class Transaction {
     if (includeSignature) {
       items = this.raw
     } else {
-      if (this._implementsEIP155()) {
-        items = [
-          ...this.raw.slice(0, 6),
-          toBuffer(this.getChainId()),
-          unpadBuffer(toBuffer(0)),
-          unpadBuffer(toBuffer(0)),
-        ]
-      } else {
-        items = this.raw.slice(0, 6)
-      }
+      items = [
+        ...this.raw.slice(0, 10),
+        toBuffer(this.getChainId()),
+        unpadBuffer(toBuffer(0)),
+        unpadBuffer(toBuffer(0)),
+      ]
     }
 
     // create hash
@@ -277,7 +315,7 @@ export default class Transaction {
    * The amount of gas paid for the data in this tx
    */
   getDataFee(): BN {
-    const data = this.raw[5]
+    const data = this.raw[6]
     const cost = new BN(0)
     for (let i = 0; i < data.length; i++) {
       data[i] === 0
@@ -389,23 +427,26 @@ export default class Transaction {
     })
   }
 
+  //fisco bcos is eip155 emplemented
+  //deprecate
   private _implementsEIP155(): boolean {
-    const onEIP155BlockOrLater = this._common.gteHardfork('spuriousDragon')
+    return true
+    // const onEIP155BlockOrLater = this._common.gteHardfork('spuriousDragon')
 
-    if (!this._isSigned()) {
-      // We sign with EIP155 all unsigned transactions after spuriousDragon
-      return onEIP155BlockOrLater
-    }
+    // if (!this._isSigned()) {
+    //   // We sign with EIP155 all unsigned transactions after spuriousDragon
+    //   return onEIP155BlockOrLater
+    // }
 
     // EIP155 spec:
     // If block.number >= 2,675,000 and v = CHAIN_ID * 2 + 35 or v = CHAIN_ID * 2 + 36, then when computing
     // the hash of a transaction for purposes of signing or recovering, instead of hashing only the first six
     // elements (i.e. nonce, gasprice, startgas, to, value, data), hash nine elements, with v replaced by
     // CHAIN_ID, r = 0 and s = 0.
-    const v = bufferToInt(this.v)
+    // const v = bufferToInt(this.v)
 
-    const vAndChainIdMeetEIP155Conditions =
-      v === this.getChainId() * 2 + 35 || v === this.getChainId() * 2 + 36
-    return vAndChainIdMeetEIP155Conditions && onEIP155BlockOrLater
+    // const vAndChainIdMeetEIP155Conditions =
+    //   v === this.getChainId() * 2 + 35 || v === this.getChainId() * 2 + 36
+    // return vAndChainIdMeetEIP155Conditions && onEIP155BlockOrLater
   }
 }

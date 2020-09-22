@@ -11,7 +11,6 @@ import { Blockchain, BlockData, BlockOptions } from './types'
 export class Block {
   public readonly header: BlockHeader
   public readonly transactions: Transaction[] = []
-  public readonly uncleHeaders: BlockHeader[] = []
   public readonly txTrie = new Trie()
 
   private readonly _common: Common
@@ -36,7 +35,6 @@ export class Block {
     }
 
     let rawTransactions
-    let rawUncleHeaders
 
     if (Buffer.isBuffer(data)) {
       // We do this to silence a TS error. We know that after this statement, data is
@@ -49,18 +47,11 @@ export class Block {
     if (Array.isArray(data)) {
       this.header = new BlockHeader(data[0], options)
       rawTransactions = data[1]
-      rawUncleHeaders = data[2]
     } else {
       this.header = new BlockHeader(data.header, options)
       rawTransactions = data.transactions || []
-      rawUncleHeaders = data.uncleHeaders || []
     }
     this._common = this.header._common
-
-    // parse uncle headers
-    for (let i = 0; i < rawUncleHeaders.length; i++) {
-      this.uncleHeaders.push(new BlockHeader(rawUncleHeaders[i], options))
-    }
 
     // parse transactions
     for (let i = 0; i < rawTransactions.length; i++) {
@@ -101,7 +92,6 @@ export class Block {
     const raw = [
       this.header.raw,
       this.transactions.map((tx) => tx.raw),
-      this.uncleHeaders.map((uh) => uh.raw),
     ]
 
     return rlpEncode ? rlp.encode(raw) : raw
@@ -161,7 +151,6 @@ export class Block {
    */
   async validate(blockchain: Blockchain): Promise<void> {
     await Promise.all([
-      this.validateUncles(blockchain),
       this.genTxTrie(),
       this.header.validate(blockchain),
     ])
@@ -174,45 +163,8 @@ export class Block {
     if (txErrors !== '') {
       throw new Error(txErrors)
     }
-
-    if (!this.validateUnclesHash()) {
-      throw new Error('invalid uncle hash')
-    }
   }
 
-  /**
-   * Validates the uncle's hash
-   */
-  validateUnclesHash(): boolean {
-    const raw = rlp.encode(this.uncleHeaders.map((uh) => uh.raw))
-
-    return keccak256(raw).equals(this.header.uncleHash)
-  }
-
-  /**
-   * Validates the uncles that are in the block, if any. This method throws if they are invalid.
-   *
-   * @param blockchain - the blockchain that this block wants to be part of
-   */
-  async validateUncles(blockchain: Blockchain): Promise<void> {
-    if (this.isGenesis()) {
-      return
-    }
-
-    if (this.uncleHeaders.length > 2) {
-      throw new Error('too many uncle headers')
-    }
-
-    const uncleHashes = this.uncleHeaders.map((header) => header.hash().toString('hex'))
-
-    if (!(new Set(uncleHashes).size === uncleHashes.length)) {
-      throw new Error('duplicate uncles')
-    }
-
-    await Promise.all(
-      this.uncleHeaders.map(async (uh) => this._validateUncleHeader(uh, blockchain)),
-    )
-  }
 
   /**
    * Returns the block in JSON format
@@ -224,7 +176,6 @@ export class Block {
       return {
         header: this.header.toJSON(true),
         transactions: this.transactions.map((tx) => tx.toJSON(true)),
-        uncleHeaders: this.uncleHeaders.forEach((uh) => uh.toJSON(true)),
       }
     } else {
       return baToJSON(this.raw)
@@ -233,14 +184,5 @@ export class Block {
 
   private async _putTxInTrie(txIndex: number, tx: Transaction) {
     await this.txTrie.put(rlp.encode(txIndex), tx.serialize())
-  }
-
-  private _validateUncleHeader(uncleHeader: BlockHeader, blockchain: Blockchain) {
-    // TODO: Validate that the uncle header hasn't been included in the blockchain yet.
-    // This is not possible in ethereumjs-blockchain since this PR was merged:
-    // https://github.com/ethereumjs/ethereumjs-blockchain/pull/47
-
-    const height = new BN(this.header.number)
-    return uncleHeader.validate(blockchain, height)
   }
 }

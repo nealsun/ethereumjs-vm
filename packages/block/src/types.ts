@@ -56,20 +56,22 @@ export type BufferLike = Buffer | TransformableToBuffer | PrefixedHexString | nu
  */
 export interface BlockHeaderData {
   parentHash?: BufferLike
-  uncleHash?: BufferLike
-  coinbase?: BufferLike
+  // uncleHash?: BufferLike
+  // coinbase?: BufferLike
   stateRoot?: BufferLike
   transactionsTrie?: BufferLike
   receiptTrie?: BufferLike
+  dbHash?: BufferLike
   bloom?: BufferLike
-  difficulty?: BufferLike
   number?: BufferLike
   gasLimit?: BufferLike
   gasUsed?: BufferLike
   timestamp?: BufferLike
   extraData?: BufferLike
-  mixHash?: BufferLike
-  nonce?: BufferLike
+  sealer?: BufferLike
+  sealerList?: BufferLike
+  headHash?: BufferLike
+  // nonce?: BufferLike
 }
 
 /**
@@ -78,7 +80,6 @@ export interface BlockHeaderData {
 export interface BlockData {
   header?: Buffer | PrefixedHexString | BufferLike[] | BlockHeaderData
   transactions?: Array<Buffer | PrefixedHexString | BufferLike[] | TxData>
-  uncleHeaders?: Array<Buffer | PrefixedHexString | BufferLike[] | BlockHeaderData>
 }
 
 export interface Blockchain {

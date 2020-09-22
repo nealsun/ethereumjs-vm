@@ -125,7 +125,7 @@ export default class Blockchain implements BlockchainInterface {
       this._common = new Common({ chain: DEFAULT_CHAIN, hardfork: DEFAULT_HARDFORK })
     }
 
-    this._validatePow = opts.validatePow !== undefined ? opts.validatePow : true
+    this._validatePow = opts.validatePow !== undefined ? opts.validatePow : false
     this._validateBlocks = opts.validateBlocks !== undefined ? opts.validateBlocks : true
 
     this.db = opts.db ? opts.db : level()
@@ -334,6 +334,7 @@ export default class Blockchain implements BlockchainInterface {
   /**
    * @hidden
    */
+  //TODO: change storage structure
   async _putBlockOrHeader(item: Block | BlockHeader, isGenesis?: boolean) {
     let block =
       item instanceof BlockHeader
@@ -342,7 +343,6 @@ export default class Blockchain implements BlockchainInterface {
     const header = block.header
     const hash = block.hash()
     const number = new BN(header.number)
-    const td = new BN(header.difficulty)
     const currentTd: { [key: string]: BN } = { header: new BN(0), block: new BN(0) }
     const dbOps: DBOp[] = []
 
@@ -365,19 +365,19 @@ export default class Blockchain implements BlockchainInterface {
       }
     }
 
-    if (!isGenesis) {
-      // set total difficulty in the current context scope
-      if (this._headHeader) {
-        currentTd.header = await this._getTd(this._headHeader)
-      }
-      if (this._headBlock) {
-        currentTd.block = await this._getTd(this._headBlock)
-      }
+    // if (!isGenesis) {
+    //   // set total difficulty in the current context scope
+    //   if (this._headHeader) {
+    //     currentTd.header = await this._getTd(this._headHeader)
+    //   }
+    //   if (this._headBlock) {
+    //     currentTd.block = await this._getTd(this._headBlock)
+    //   }
 
-      // calculate the total difficulty of the new block
-      const parentTd = await this._getTd(header.parentHash, number.subn(1))
-      td.iadd(parentTd)
-    }
+    //   // calculate the total difficulty of the new block
+    //   const parentTd = await this._getTd(header.parentHash, number.subn(1))
+    //   td.iadd(parentTd)
+    // }
 
     const rebuildInfo = async () => {
       const type = 'put'
@@ -385,19 +385,19 @@ export default class Blockchain implements BlockchainInterface {
       const valueEncoding = 'binary'
 
       // save block and total difficulty to the database
-      let key = tdKey(number, hash)
-      let value = rlp.encode(td)
-      dbOps.push({ type, key, value, keyEncoding, valueEncoding })
-      this.dbManager._cache.td.set(key, value)
+      // let key = tdKey(number, hash)
+      // let value = rlp.encode(td)
+      // dbOps.push({ type, key, value, keyEncoding, valueEncoding })
+      // this.dbManager._cache.td.set(key, value)
 
       // save header
-      key = headerKey(number, hash)
-      value = rlp.encode(header.raw)
+      let key = headerKey(number, hash)
+      let value = rlp.encode(header.raw)
       dbOps.push({ type, key, value, keyEncoding, valueEncoding })
       this.dbManager._cache.header.set(key, value)
 
       // store body if it exists
-      if (isGenesis || block.transactions.length || block.uncleHeaders.length) {
+      if (isGenesis || block.transactions.length) {
         const body = block.serialize(false).slice(1)
         key = bodyKey(number, hash)
         value = rlp.encode(body)
@@ -406,7 +406,7 @@ export default class Blockchain implements BlockchainInterface {
       }
 
       // if total difficulty is higher than current, add it to canonical chain
-      if (block.isGenesis() || td.gt(currentTd.header)) {
+      if (block.isGenesis()) {
         this._headHeader = hash
         if (item instanceof Block) {
           this._headBlock = hash
@@ -419,7 +419,7 @@ export default class Blockchain implements BlockchainInterface {
         await this._deleteStaleAssignments(number.iaddn(1), hash, dbOps)
         await this._rebuildCanonical(header, dbOps)
       } else {
-        if (td.gt(currentTd.block) && item instanceof Block) {
+        if (item instanceof Block) {
           this._headBlock = hash
         }
         // save hash to number lookup info even if rebuild not needed

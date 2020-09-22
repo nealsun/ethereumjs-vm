@@ -52,7 +52,6 @@ export class DBManager {
     this._db = db
     this._common = common
     this._cache = {
-      td: new Cache({ max: 1024 }),
       header: new Cache({ max: 512 }),
       body: new Cache({ max: 256 }),
       numberToHash: new Cache({ max: 2048 }),
@@ -99,10 +98,9 @@ export class DBManager {
     let hash
     if (Buffer.isBuffer(blockId)) {
       hash = blockId
-      number = await this.hashToNumber(blockId)
     } else if (BN.isBN(blockId)) {
       number = blockId
-      hash = await this.numberToHash(blockId)
+      hash = await this.numberToHash(number)
     } else {
       throw new Error('Unknown blockId type')
     }
